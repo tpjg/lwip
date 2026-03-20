@@ -688,7 +688,7 @@ nd6_input(struct pbuf *p, struct ip_globals *ip_data)
       case ND6_OPTION_TYPE_SOURCE_LLADDR:
       {
         struct lladdr_option *lladdr_opt;
-        if (option_len < sizeof(struct lladdr_option)) {
+        if (option_len < (ND6_LLADDR_OPTION_MIN_LENGTH + inp->hwaddr_len)) {
           goto lenerr_drop_free_return;
         }
         lladdr_opt = (struct lladdr_option *)buffer;
