@@ -82,8 +82,9 @@
 
 #include <string.h>
 
-/* nanos: DHCP Option 121 (Classless Static Routes) support */
-#include <dhcp_option121.h>
+#if LWIP_DHCP_CLASSLESS_STATIC_ROUTES
+#include "lwip/dhcp_classless_route.h"
+#endif
 
 #ifdef LWIP_HOOK_FILENAME
 #include LWIP_HOOK_FILENAME
@@ -173,8 +174,10 @@ static u8_t dhcp_discover_request_options[] = {
 #if LWIP_DHCP_GET_NTP_SRV
   , DHCP_OPTION_NTP
 #endif /* LWIP_DHCP_GET_NTP_SRV */
+#if LWIP_DHCP_CLASSLESS_STATIC_ROUTES
   /* nanos: request Option 121 (Classless Static Routes) per RFC 3442 */
   , DHCP_OPTION_CLASSLESS_STATIC_ROUTE
+#endif /* LWIP_DHCP_CLASSLESS_STATIC_ROUTES */
 };
 
 #ifdef DHCP_GLOBAL_XID
@@ -738,9 +741,12 @@ dhcp_handle_ack(struct netif *netif, struct dhcp_msg *msg_in)
   }
 
   /* gateway router */
-  /* RFC 3442: If Option 121 is present, MUST ignore Option 3 (Router) */
-  if (dhcp_option_given(dhcp, DHCP_OPTION_IDX_ROUTER) &&
-      !dhcp_option121_received(netif)) {
+  if (dhcp_option_given(dhcp, DHCP_OPTION_IDX_ROUTER)
+#if LWIP_DHCP_CLASSLESS_STATIC_ROUTES
+      /* RFC 3442: If Option 121 is present, MUST ignore Option 3 (Router) */
+      && !dhcp_classless_route_received(netif)
+#endif /* LWIP_DHCP_CLASSLESS_STATIC_ROUTES */
+      ) {
     ip4_addr_set_u32(&dhcp->offered_gw_addr, lwip_htonl(dhcp_get_option_value(dhcp, DHCP_OPTION_IDX_ROUTER)));
   }
 
@@ -798,8 +804,10 @@ void dhcp_cleanup(struct netif *netif)
   LWIP_ASSERT_CORE_LOCKED();
   LWIP_ASSERT("netif != NULL", netif != NULL);
 
+#if LWIP_DHCP_CLASSLESS_STATIC_ROUTES
   /* nanos: clear Option 121 routes before cleaning up DHCP state */
-  dhcp_option121_clear(netif);
+  dhcp_classless_route_clear(netif);
+#endif /* LWIP_DHCP_CLASSLESS_STATIC_ROUTES */
 
   SYS_ARCH_LOCK(&dhcp_mutex);
   if (netif_dhcp_data(netif) != NULL) {
@@ -1373,8 +1381,10 @@ dhcp_release_and_stop(struct netif *netif)
     return;
   }
 
+#if LWIP_DHCP_CLASSLESS_STATIC_ROUTES
   /* nanos: clear Option 121 routes on release/stop */
-  dhcp_option121_clear(netif);
+  dhcp_classless_route_clear(netif);
+#endif /* LWIP_DHCP_CLASSLESS_STATIC_ROUTES */
 
   ip_addr_copy(server_ip_addr, dhcp->server_ip_addr);
 
@@ -1549,7 +1559,7 @@ dhcp_option_hostname(u16_t options_out_len, u8_t *options, struct netif *netif)
  *
  */
 static err_t
-dhcp_parse_reply(struct pbuf *p, struct dhcp *dhcp)
+dhcp_parse_reply(struct pbuf *p, struct dhcp *dhcp, struct netif *netif)
 {
   u8_t *options;
   u16_t offset;
@@ -1678,10 +1688,20 @@ again:
         LWIP_ERROR("len == 4", len == 4, return ERR_VAL;);
         decode_idx = DHCP_OPTION_IDX_T2;
         break;
+#if LWIP_DHCP_CLASSLESS_STATIC_ROUTES
+      case (DHCP_OPTION_CLASSLESS_STATIC_ROUTE):
+        /* nanos: parse classless static routes (RFC 3442), only from ACK */
+        if (dhcp_option_given(dhcp, DHCP_OPTION_IDX_MSG_TYPE) &&
+            (dhcp_get_option_value(dhcp, DHCP_OPTION_IDX_MSG_TYPE) == DHCP_ACK)) {
+          dhcp_parse_classless_routes(netif, q, val_offset, len);
+        }
+        decode_len = 0;
+        break;
+#endif /* LWIP_DHCP_CLASSLESS_STATIC_ROUTES */
       default:
         decode_len = 0;
         LWIP_DEBUGF(DHCP_DEBUG, ("skipping option %"U16_F" in options\n", (u16_t)op));
-        LWIP_HOOK_DHCP_PARSE_OPTION(ip_current_netif(), dhcp, dhcp->state, msg_in,
+        LWIP_HOOK_DHCP_PARSE_OPTION(netif, dhcp, dhcp->state, msg_in,
                                     dhcp_option_given(dhcp, DHCP_OPTION_IDX_MSG_TYPE) ? (u8_t)dhcp_get_option_value(dhcp, DHCP_OPTION_IDX_MSG_TYPE) : 0,
                                     op, len, q, val_offset);
         break;
@@ -1849,16 +1869,11 @@ dhcp_recv(void *arg, struct udp_pcb *pcb, struct pbuf *p, struct ip_globals *ip_
     goto free_pbuf_and_return;
   }
   /* option fields could be unfold? */
-  /* nanos: set current netif for DHCP option hooks (e.g., Option 121) */
-  extern struct netif *nanos_dhcp_current_netif;
-  nanos_dhcp_current_netif = netif;
-  if (dhcp_parse_reply(p, dhcp) != ERR_OK) {
-    nanos_dhcp_current_netif = NULL;
+  if (dhcp_parse_reply(p, dhcp, netif) != ERR_OK) {
     LWIP_DEBUGF(DHCP_DEBUG | LWIP_DBG_TRACE | LWIP_DBG_LEVEL_SERIOUS,
                 ("problem unfolding DHCP message - too short on memory?\n"));
     goto free_pbuf_and_return;
   }
-  nanos_dhcp_current_netif = NULL;
 
   LWIP_DEBUGF(DHCP_DEBUG | LWIP_DBG_TRACE, ("searching DHCP_OPTION_MESSAGE_TYPE\n"));
   /* obtain pointer to DHCP message type */

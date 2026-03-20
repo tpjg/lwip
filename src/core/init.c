@@ -58,6 +58,11 @@
 #include "lwip/mld6.h"
 #include "lwip/api.h"
 
+#if LWIP_DHCP_CLASSLESS_STATIC_ROUTES
+#include "lwip/ip4_route_table.h"
+#include "lwip/dhcp_classless_route.h"
+#endif /* LWIP_DHCP_CLASSLESS_STATIC_ROUTES */
+
 #include "netif/ppp/ppp_opts.h"
 #include "netif/ppp/ppp_impl.h"
 
@@ -370,6 +375,10 @@ lwip_init(void)
 #if LWIP_DNS
   dns_init();
 #endif /* LWIP_DNS */
+#if LWIP_DHCP_CLASSLESS_STATIC_ROUTES
+  ip4_route_table_init();
+  dhcp_classless_route_init();
+#endif /* LWIP_DHCP_CLASSLESS_STATIC_ROUTES */
 #if PPP_SUPPORT
   ppp_init();
 #endif
