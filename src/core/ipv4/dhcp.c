@@ -175,7 +175,7 @@ static u8_t dhcp_discover_request_options[] = {
   , DHCP_OPTION_NTP
 #endif /* LWIP_DHCP_GET_NTP_SRV */
 #if LWIP_DHCP_CLASSLESS_STATIC_ROUTES
-  /* nanos: request Option 121 (Classless Static Routes) per RFC 3442 */
+  /* request Option 121 (Classless Static Routes) per RFC 3442 */
   , DHCP_OPTION_CLASSLESS_STATIC_ROUTE
 #endif /* LWIP_DHCP_CLASSLESS_STATIC_ROUTES */
 };
@@ -805,7 +805,7 @@ void dhcp_cleanup(struct netif *netif)
   LWIP_ASSERT("netif != NULL", netif != NULL);
 
 #if LWIP_DHCP_CLASSLESS_STATIC_ROUTES
-  /* nanos: clear Option 121 routes before cleaning up DHCP state */
+  /* clear Option 121 routes before cleaning up DHCP state */
   dhcp_classless_route_clear(netif);
 #endif /* LWIP_DHCP_CLASSLESS_STATIC_ROUTES */
 
@@ -1382,7 +1382,7 @@ dhcp_release_and_stop(struct netif *netif)
   }
 
 #if LWIP_DHCP_CLASSLESS_STATIC_ROUTES
-  /* nanos: clear Option 121 routes on release/stop */
+  /* clear Option 121 routes on release/stop */
   dhcp_classless_route_clear(netif);
 #endif /* LWIP_DHCP_CLASSLESS_STATIC_ROUTES */
 
@@ -1690,7 +1690,7 @@ again:
         break;
 #if LWIP_DHCP_CLASSLESS_STATIC_ROUTES
       case (DHCP_OPTION_CLASSLESS_STATIC_ROUTE):
-        /* nanos: parse classless static routes (RFC 3442), only from ACK */
+        /* parse classless static routes (RFC 3442), only from ACK */
         if (dhcp_option_given(dhcp, DHCP_OPTION_IDX_MSG_TYPE) &&
             (dhcp_get_option_value(dhcp, DHCP_OPTION_IDX_MSG_TYPE) == DHCP_ACK)) {
           dhcp_parse_classless_routes(netif, q, val_offset, len);
@@ -1808,7 +1808,7 @@ decode_next:
     /* make sure the string is really NULL-terminated */
     dhcp->boot_file_name[DHCP_FILE_LEN-1] = 0;
   }
-#endif /* LWIP_DHCP_BOOTP_FILE */ 
+#endif /* LWIP_DHCP_BOOTP_FILE */
   return ERR_OK;
 }
 

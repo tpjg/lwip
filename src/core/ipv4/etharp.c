@@ -55,6 +55,10 @@
 #include "lwip/prot/iana.h"
 #include "netif/ethernet.h"
 
+#if LWIP_DHCP_CLASSLESS_STATIC_ROUTES
+#include "lwip/ip4_route_table.h"
+#endif
+
 #include <string.h>
 
 #ifdef LWIP_HOOK_FILENAME
@@ -858,6 +862,13 @@ etharp_output(struct netif *netif, struct pbuf *q, const ip4_addr_t *ipaddr)
       if (!ip4_addr_islinklocal(&iphdr->src))
 #endif /* LWIP_AUTOIP */
       {
+#if LWIP_DHCP_CLASSLESS_STATIC_ROUTES
+        /* check static route table for a per-route gateway */
+        ip4_addr_t static_gw;
+        if (ip4_get_gateway(ipaddr, &static_gw)) {
+          dst_addr = &static_gw;
+        } else
+#endif /* LWIP_DHCP_CLASSLESS_STATIC_ROUTES */
 #ifdef LWIP_HOOK_ETHARP_GET_GW
         /* For advanced routing, a single default gateway might not be enough, so get
            the IP address of the gateway to handle the current destination address. */
