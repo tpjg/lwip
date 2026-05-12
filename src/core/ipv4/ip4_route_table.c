@@ -60,13 +60,13 @@ ip4_prefix_to_mask(u8_t prefix_len)
 {
   if (prefix_len == 0)
     return 0;
-  if (prefix_len >= 32)
+  if (prefix_len >= IP4_MAX_PREFIX_LEN)
     return 0xFFFFFFFF;
-  return PP_HTONL(~((1UL << (32 - prefix_len)) - 1));
+  return lwip_htonl(~((1UL << (32 - prefix_len)) - 1));
 }
 
 /* Check if a destination address matches a route entry */
-static inline int
+static int
 route_matches(const struct ip4_route_entry *entry, const ip4_addr_t *dest)
 {
   u32_t mask = ip4_prefix_to_mask(entry->prefix_len);
@@ -121,10 +121,11 @@ ip4_route_add(const ip4_addr_t *dest, u8_t prefix_len,
   int i;
   u32_t mask;
 
-  if (dest == NULL || gateway == NULL || netif == NULL)
-    return ERR_ARG;
-  if (prefix_len > IP4_MAX_PREFIX_LEN)
-    return ERR_ARG;
+  LWIP_ERROR("ip4_route_add: dest != NULL", dest != NULL, return ERR_ARG);
+  LWIP_ERROR("ip4_route_add: gateway != NULL", gateway != NULL, return ERR_ARG);
+  LWIP_ERROR("ip4_route_add: netif != NULL", netif != NULL, return ERR_ARG);
+  LWIP_ERROR("ip4_route_add: prefix_len <= IP4_MAX_PREFIX_LEN",
+             prefix_len <= IP4_MAX_PREFIX_LEN, return ERR_ARG);
 
   SYS_ARCH_LOCK(&route_lock);
 
@@ -170,8 +171,9 @@ ip4_route_remove(const ip4_addr_t *dest, u8_t prefix_len, struct netif *netif)
   int idx;
   int i;
 
-  if (dest == NULL || prefix_len > IP4_MAX_PREFIX_LEN)
-    return;
+  LWIP_ERROR("ip4_route_remove: dest != NULL", dest != NULL, return);
+  LWIP_ERROR("ip4_route_remove: prefix_len <= IP4_MAX_PREFIX_LEN",
+             prefix_len <= IP4_MAX_PREFIX_LEN, return);
 
   SYS_ARCH_LOCK(&route_lock);
 
@@ -190,49 +192,17 @@ ip4_route_remove(const ip4_addr_t *dest, u8_t prefix_len, struct netif *netif)
 }
 
 void
-ip4_route_remove_netif(struct netif *netif)
+ip4_route_remove_netif(struct netif *netif, u8_t flags)
 {
   int i;
   int j;
-
-  if (netif == NULL)
-    return;
 
   SYS_ARCH_LOCK(&route_lock);
 
   i = 0;
   while (i < route_entry_count) {
-    if (route_table[i].netif == netif) {
-      for (j = i; j < route_entry_count - 1; j++) {
-        memcpy(&route_table[j], &route_table[j + 1],
-               sizeof(struct ip4_route_entry));
-      }
-      memset(&route_table[route_entry_count - 1], 0,
-             sizeof(struct ip4_route_entry));
-      route_entry_count--;
-    } else {
-      i++;
-    }
-  }
-
-  SYS_ARCH_UNLOCK(&route_lock);
-}
-
-void
-ip4_route_remove_dhcp(struct netif *netif)
-{
-  int i;
-  int j;
-
-  if (netif == NULL)
-    return;
-
-  SYS_ARCH_LOCK(&route_lock);
-
-  i = 0;
-  while (i < route_entry_count) {
-    if (route_table[i].netif == netif &&
-        (route_table[i].flags & IP4_ROUTE_FLAG_DHCP)) {
+    if ((route_table[i].netif == netif) &&
+        (route_table[i].flags & flags) == flags) {
       for (j = i; j < route_entry_count - 1; j++) {
         memcpy(&route_table[j], &route_table[j + 1],
                sizeof(struct ip4_route_entry));
@@ -254,8 +224,7 @@ ip4_route_find(const ip4_addr_t *dest, struct ip4_route_entry *out_entry)
   u8_t found = 0;
   int i;
 
-  if (dest == NULL)
-    return 0;
+  LWIP_ERROR("ip4_route_find: dest != NULL", dest != NULL, return 0);
 
   SYS_ARCH_LOCK(&route_lock);
 
@@ -288,39 +257,52 @@ ip4_static_route(const ip4_addr_t *src, const ip4_addr_t *dest)
 }
 
 u8_t
-ip4_get_gateway(const ip4_addr_t *dest, ip4_addr_t *out_gateway)
+ip4_get_gateway(struct netif *netif, const ip4_addr_t *dest, ip4_addr_t *out_gateway)
 {
-  struct ip4_route_entry entry;
+  u8_t found = 0;
+  int i;
 
-  if (ip4_route_find(dest, &entry)) {
-    if (out_gateway != NULL)
-      ip4_addr_copy(*out_gateway, entry.gateway);
-    return 1;
-  }
-  return 0;
-}
+  LWIP_ERROR("ip4_get_gateway: netif != NULL", netif != NULL, return 0);
+  LWIP_ERROR("ip4_get_gateway: dest != NULL", dest != NULL, return 0);
 
-/*
- * Get read-only access to route table for debugging/netlink.
- * Note: Caller must not hold route_lock. The returned pointer is valid
- * but entries may change if routes are modified concurrently.
- */
-const struct ip4_route_entry *
-ip4_get_route_table(int *count)
-{
-  if (count != NULL)
-    *count = route_entry_count;
-  return route_table;
-}
-
-int
-ip4_route_count(void)
-{
-  int count;
   SYS_ARCH_LOCK(&route_lock);
-  count = route_entry_count;
+
+  for (i = 0; i < route_entry_count; i++) {
+    if (route_table[i].netif == netif) {
+      u32_t mask = ip4_prefix_to_mask(route_table[i].prefix_len);
+      if ((dest->addr & mask) == (route_table[i].dest.addr & mask)) {
+        if (out_gateway != NULL)
+          ip4_addr_copy(*out_gateway, route_table[i].gateway);
+        found = 1;
+        break;
+      }
+    }
+  }
+
   SYS_ARCH_UNLOCK(&route_lock);
-  return count;
+  return found;
+}
+
+u8_t
+ip4_route_exists(struct netif *netif, u8_t flags)
+{
+  u8_t found = 0;
+  int i;
+
+  LWIP_ERROR("ip4_route_exists: netif != NULL", netif != NULL, return 0);
+
+  SYS_ARCH_LOCK(&route_lock);
+
+  for (i = 0; i < route_entry_count; i++) {
+    if (route_table[i].netif == netif &&
+        (route_table[i].flags & flags) == flags) {
+      found = 1;
+      break;
+    }
+  }
+
+  SYS_ARCH_UNLOCK(&route_lock);
+  return found;
 }
 
 #endif /* LWIP_DHCP_CLASSLESS_STATIC_ROUTES */

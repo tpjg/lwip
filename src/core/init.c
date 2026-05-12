@@ -60,7 +60,6 @@
 
 #if LWIP_DHCP_CLASSLESS_STATIC_ROUTES
 #include "lwip/ip4_route_table.h"
-#include "lwip/dhcp_classless_route.h"
 #endif /* LWIP_DHCP_CLASSLESS_STATIC_ROUTES */
 
 #include "netif/ppp/ppp_opts.h"
@@ -98,6 +97,9 @@ PACK_STRUCT_END
 #endif
 #if (!LWIP_UDP && LWIP_DHCP)
 #error "If you want to use DHCP, you have to define LWIP_UDP=1 in your lwipopts.h"
+#endif
+#if (LWIP_DHCP_CLASSLESS_STATIC_ROUTES && !LWIP_DHCP)
+#error "If you want to use LWIP_DHCP_CLASSLESS_STATIC_ROUTES, you have to define LWIP_DHCP=1 in your lwipopts.h"
 #endif
 #if (!LWIP_UDP && !LWIP_RAW && LWIP_MULTICAST_TX_OPTIONS)
 #error "If you want to use LWIP_MULTICAST_TX_OPTIONS, you have to define LWIP_UDP=1 and/or LWIP_RAW=1 in your lwipopts.h"
@@ -377,7 +379,6 @@ lwip_init(void)
 #endif /* LWIP_DNS */
 #if LWIP_DHCP_CLASSLESS_STATIC_ROUTES
   ip4_route_table_init();
-  dhcp_classless_route_init();
 #endif /* LWIP_DHCP_CLASSLESS_STATIC_ROUTES */
 #if PPP_SUPPORT
   ppp_init();

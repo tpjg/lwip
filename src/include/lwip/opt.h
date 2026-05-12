@@ -974,19 +974,11 @@
 #endif
 
 /**
- * LWIP_DHCP_CLASSLESS_ROUTE_MAX_NETIFS: Maximum number of network interfaces
- * tracked for Option 121 state. Should match or exceed the system interface count.
- */
-#if !defined LWIP_DHCP_CLASSLESS_ROUTE_MAX_NETIFS || defined __DOXYGEN__
-#define LWIP_DHCP_CLASSLESS_ROUTE_MAX_NETIFS  16
-#endif
-
-/**
  * LWIP_IPV4_NUM_ROUTE_ENTRIES: Maximum number of entries in the IPv4 static
  * route table. Used when LWIP_DHCP_CLASSLESS_STATIC_ROUTES is enabled.
  */
 #if !defined LWIP_IPV4_NUM_ROUTE_ENTRIES || defined __DOXYGEN__
-#define LWIP_IPV4_NUM_ROUTE_ENTRIES  16
+#define LWIP_IPV4_NUM_ROUTE_ENTRIES  8
 #endif
 /**
  * @}

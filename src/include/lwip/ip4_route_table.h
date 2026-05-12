@@ -7,7 +7,7 @@
  */
 
 /*
- * Copyright (c) 2026 Timo Gatsonides
+ * Copyright (c) 2025 Timo Gatsonides
  * All rights reserved.
  *
  * Redistribution and use in source and binary forms, with or without modification,
@@ -88,11 +88,17 @@ err_t ip4_route_add(const ip4_addr_t *dest, u8_t prefix_len,
 /** Remove a specific route from the table */
 void ip4_route_remove(const ip4_addr_t *dest, u8_t prefix_len, struct netif *netif);
 
-/** Remove all routes associated with a network interface */
-void ip4_route_remove_netif(struct netif *netif);
+/** Remove routes matching a network interface and flags */
+void ip4_route_remove_netif(struct netif *netif, u8_t flags);
 
-/** Remove all DHCP-learned routes for a network interface */
-void ip4_route_remove_dhcp(struct netif *netif);
+/**
+ * Check whether a route with the given netif and flags exists.
+ *
+ * @param netif network interface to check
+ * @param flags route flags to match
+ * @return 1 if such a route exists, 0 otherwise
+ */
+u8_t ip4_route_exists(struct netif *netif, u8_t flags);
 
 /**
  * Find the best matching route for a destination address (longest prefix match).
@@ -117,17 +123,12 @@ struct netif *ip4_static_route(const ip4_addr_t *src, const ip4_addr_t *dest);
  * Get the gateway address for a destination from the static route table.
  * Copies gateway to out_gateway if found.
  *
+ * @param netif network interface to match
  * @param dest destination IP address to look up
  * @param out_gateway pointer to store the gateway address (may be NULL)
  * @return 1 if route found, 0 otherwise
  */
-u8_t ip4_get_gateway(const ip4_addr_t *dest, ip4_addr_t *out_gateway);
-
-/** Get read-only access to route table for debugging/netlink reporting */
-const struct ip4_route_entry *ip4_get_route_table(int *count);
-
-/** Get the number of active routes in the table */
-int ip4_route_count(void);
+u8_t ip4_get_gateway(struct netif *netif, const ip4_addr_t *dest, ip4_addr_t *out_gateway);
 
 #ifdef __cplusplus
 }
