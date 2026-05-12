@@ -175,6 +175,8 @@ ip4addr_aton(sstring cp, ip4_addr_t *addr)
     for (; i < cp.len; i++) {
       c = cp.ptr[i];
       if (lwip_isdigit(c)) {
+        if ((base == 8) && ((u32_t)(c - '0') >= 8))
+          break;
         val = (val * base) + (u32_t)(c - '0');
       } else if (base == 16 && lwip_isxdigit(c)) {
         val = (val << 4) | (u32_t)(c + 10 - (lwip_islower(c) ? 'a' : 'A'));
