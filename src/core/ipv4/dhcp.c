@@ -561,6 +561,7 @@ dhcp_start_locked(struct netif *netif)
       LWIP_DEBUGF(DHCP_DEBUG | LWIP_DBG_TRACE, ("dhcp_start(): could not allocate dhcp\n"));
       return ERR_MEM;
     }
+    dhcp->flags = 0;
 
     /* store this dhcp client in the netif */
     netif_set_client_data(netif, LWIP_NETIF_CLIENT_DATA_INDEX_DHCP, dhcp);
@@ -575,8 +576,12 @@ dhcp_start_locked(struct netif *netif)
     /* dhcp is cleared below, no need to reset flag*/
   }
 
-  /* clear data structure */
-  memset(dhcp, 0, sizeof(struct dhcp));
+  /* clear data structure but preserve DHCP_FLAG_EXTERNAL_MEM for dhcp_cleanup() */
+  {
+    u8_t saved_flags = dhcp->flags;
+    memset(dhcp, 0, sizeof(struct dhcp));
+    dhcp->flags = saved_flags & DHCP_FLAG_EXTERNAL_MEM;
+  }
   /* dhcp_set_state(&dhcp, DHCP_STATE_OFF); */
 
   LWIP_DEBUGF(DHCP_DEBUG | LWIP_DBG_TRACE, ("dhcp_start(): starting DHCP configuration\n"));
@@ -840,9 +845,9 @@ dhcp_handle_ack(struct netif *netif, struct dhcp_msg *msg_in)
   if (dhcp_option_given(dhcp, DHCP_OPTION_IDX_SUBNET_MASK)) {
     /* remember given subnet mask */
     ip4_addr_set_u32(&dhcp->offered_sn_mask, lwip_htonl(dhcp_get_option_value(dhcp, DHCP_OPTION_IDX_SUBNET_MASK)));
-    dhcp->subnet_mask_given = 1;
+    dhcp->flags |= DHCP_FLAG_SUBNET_MASK_GIVEN;
   } else {
-    dhcp->subnet_mask_given = 0;
+    dhcp->flags = (u8_t)(dhcp->flags & ~DHCP_FLAG_SUBNET_MASK_GIVEN);
   }
 
   /* gateway router */
@@ -891,6 +896,7 @@ dhcp_set_struct(struct netif *netif, struct dhcp *dhcp)
 
   /* clear data structure */
   memset(dhcp, 0, sizeof(struct dhcp));
+  dhcp->flags = DHCP_FLAG_EXTERNAL_MEM;
   /* dhcp_set_state(&dhcp, DHCP_STATE_OFF); */
   netif_set_client_data(netif, LWIP_NETIF_CLIENT_DATA_INDEX_DHCP, dhcp);
 }
@@ -898,9 +904,6 @@ dhcp_set_struct(struct netif *netif, struct dhcp *dhcp)
 /**
  * @ingroup dhcp4
  * Removes a struct dhcp from a netif.
- *
- * ATTENTION: Only use this when not using dhcp_set_struct() to allocate the
- *            struct dhcp since the memory is passed back to the heap.
  *
  * @param netif the netif from which to remove the struct dhcp
  */
@@ -915,7 +918,9 @@ void dhcp_cleanup(struct netif *netif)
 
   SYS_ARCH_LOCK(&dhcp_mutex);
   if (netif_dhcp_data(netif) != NULL) {
-    mem_free(netif_dhcp_data(netif));
+    if (!(netif_dhcp_data(netif)->flags & DHCP_FLAG_EXTERNAL_MEM)) {
+      mem_free(netif_dhcp_data(netif));
+    }
     netif_set_client_data(netif, LWIP_NETIF_CLIENT_DATA_INDEX_DHCP, NULL);
   }
   SYS_ARCH_UNLOCK(&dhcp_mutex);
@@ -1253,7 +1258,7 @@ dhcp_bind(struct netif *netif)
     dhcp->t1_timeout = 0;
   }
 
-  if (dhcp->subnet_mask_given) {
+  if (dhcp->flags & DHCP_FLAG_SUBNET_MASK_GIVEN) {
     /* copy offered network mask */
     ip4_addr_copy(sn_mask, dhcp->offered_sn_mask);
   } else {

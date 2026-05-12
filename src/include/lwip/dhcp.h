@@ -77,7 +77,9 @@ struct dhcp
 #if LWIP_DHCP_AUTOIP_COOP
   u8_t autoip_coop_state;
 #endif
-  u8_t subnet_mask_given;
+  u8_t flags;
+#define DHCP_FLAG_SUBNET_MASK_GIVEN 0x01
+#define DHCP_FLAG_EXTERNAL_MEM      0x02
 
   u16_t request_timeout; /* #ticks with period DHCP_FINE_TIMER_SECS for request timeout */
   u16_t t1_timeout;  /* #ticks with period DHCP_COARSE_TIMER_SECS for renewal time */
